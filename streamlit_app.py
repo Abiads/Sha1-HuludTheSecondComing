@@ -1,133 +1,135 @@
+# ---------------------------------------------
+# streamlit_app.py  (PART 1 — Setup + Base UI)
+# ---------------------------------------------
+
 import base64
 import binascii
 import json
 import streamlit as st
 
+# -------------------------------------------------
+# Modern UI Theme + Page Setup
+# -------------------------------------------------
+st.set_page_config(
+    page_title="Sha1-Hulud: The Second Coming",
+    page_icon="🧩",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
 
-def safe_b64_decode(data: str) -> str:
+# Inject premium CSS styling
+st.markdown(
     """
-    Decode a Base64 string safely and return text.
-    - Strips whitespace
-    - Attempts to fix missing padding
-    - Returns UTF-8 text if possible, otherwise repr of bytes
-    """
-    data = data.strip()
+    <style>
 
-    # Add padding if missing
-    missing = len(data) % 4
-    if missing:
-        data += "=" * (4 - missing)
+    /* Global UI */
+    body {
+        font-family: 'Inter', sans-serif;
+        background: #0d0f17;
+    }
+    .main {
+        background: #0d0f17;
+        padding-top: 2rem;
+    }
 
-    try:
-        raw = base64.b64decode(data, validate=False)
-    except binascii.Error as e:
-        raise ValueError(f"Invalid Base64 data: {e}")
+    /* Title */
+    h1 {
+        font-weight: 700 !important;
+        color: #e2e8f0 !important;
+        letter-spacing: -1px;
+    }
 
-    # Try UTF-8 decode; if fails, show a safe bytes repr
-    try:
-        return raw.decode("utf-8", errors="strict")
-    except UnicodeDecodeError:
-        # Fallback: show bytes representation (still useful for secrets)
-        return repr(raw)
+    /* Subtle caption */
+    .caption-text {
+        color: #94a3b8;
+        font-size: 0.9rem;
+        margin-top: -10px;
+        margin-bottom: 20px;
+    }
 
+    /* Textarea */
+    textarea {
+        background: #11121a !important;
+        color: #e2e8f0 !important;
+        border-radius: 12px !important;
+        border: 1px solid #2c3242 !important;
+        font-family: "JetBrains Mono", monospace !important;
+        padding: 15px !important;
+    }
 
-def main():
-    st.set_page_config(
-        page_title="Sha1-Hulud: The Second Coming",
-        layout="wide",
+    /* Buttons */
+    .stButton>button {
+        background: linear-gradient(90deg, #6366f1, #8b5cf6);
+        color: white;
+        padding: 0.6rem 1.4rem;
+        border-radius: 10px;
+        border: none;
+        font-weight: 600;
+        transition: 0.2s ease-in-out;
+    }
+    .stButton>button:hover {
+        transform: scale(1.03);
+        filter: brightness(1.15);
+    }
+
+    /* Success box */
+    .status-box {
+        padding: 12px 18px;
+        border-radius: 10px;
+        background: rgba(16, 185, 129, 0.12);
+        border: 1px solid rgba(16, 185, 129, 0.35);
+        color: #34d399;
+        font-weight: 500;
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# -------------------------------------------------
+# Header
+# -------------------------------------------------
+st.markdown("<h1>🧩 Sha1-Hulud: The Second Coming</h1>", unsafe_allow_html=True)
+st.markdown(
+    "<div class='caption-text'>A powerful demonstration: Base64 is **encoding**, not encryption.</div>",
+    unsafe_allow_html=True
+)
+
+# -------------------------------------------------
+# Layout: Two Columns
+# -------------------------------------------------
+left, right = st.columns([1.1, 1.3])
+
+with left:
+    st.markdown(
+        """
+        ### 🔍 What this tool does
+
+        - Decodes **Base64** safely  
+        - Optional **second-layer Base64 decode**  
+        - Pretty-prints JSON automatically  
+        - Helps educate people that **Base64 ≠ security**
+
+        **⚠️ Warning:** Never paste real credentials or production secrets here.
+        """
     )
 
-    st.title("Sha1-Hulud: The Second Coming")
-    st.caption("Base64 is encoding, not encryption. Decode and inspect safely.")
+    st.info(
+        "This tool is for awareness and educational purposes only.",
+        icon="⚠️",
+    )
 
-    col_left, col_right = st.columns([1.1, 1.2])
+with right:
+    b64_input = st.text_area(
+        "Base64 Input",
+        placeholder="Paste Base64 text here…",
+        height=230,
+    )
 
-    with col_left:
-        st.markdown(
-            """
-            Paste any **Base64-encoded string** in the panel on the right.
+    double_decode = st.checkbox(
+        "Try double decode (Base64 wrapped inside Base64)",
+        value=True,
+    )
 
-            This app will decode it and show you the real content, optionally trying
-            to decode **a second Base64 layer** if your data is wrapped twice.
-
-            > Never paste live production secrets or credentials here.
-            """
-        )
-
-        st.info(
-            "Educational demo only. Treat Base64 as plain text, not security.",
-            icon="⚠️",
-        )
-
-    with col_right:
-        b64_input = st.text_area(
-            "Base64 input",
-            placeholder="Paste Base64 here...",
-            height=220,
-        )
-        double_decode = st.checkbox(
-            "Try double decode (Base64 wrapped in Base64)",
-            value=True,
-        )
-
-        decode_clicked = st.button("🧩 Decode Base64", type="primary")
-
-    if decode_clicked:
-        if not b64_input.strip():
-            st.error("No Base64 input provided.")
-            return
-
-        decoded_text = ""
-        layers = 0
-        probably_json = False
-
-        try:
-            # First decode
-            decoded_text = safe_b64_decode(b64_input)
-            layers = 1
-
-            # Optional second decode
-            if double_decode:
-                try:
-                    decoded_text = safe_b64_decode(decoded_text)
-                    layers = 2
-                except Exception as inner_e:
-                    decoded_text += (
-                        "\n\n[!] Double-decode failed: " + str(inner_e)
-                    )
-
-            # Heuristic: looks like JSON?
-            stripped = decoded_text.strip()
-            if stripped.startswith("{") or stripped.startswith("["):
-                probably_json = True
-
-                # Try to pretty-print JSON for nicer formatting in the UI
-                try:
-                    parsed_json = json.loads(stripped)
-                    decoded_text = json.dumps(
-                        parsed_json, indent=2, ensure_ascii=False
-                    )
-                except Exception:
-                    # If it fails, just show the raw decoded text
-                    pass
-
-        except Exception as e:
-            st.error(f"Decode error: {e}")
-            return
-
-        # Show result
-        cols = st.columns([1, 3])
-        with cols[0]:
-            label = f"{layers} layer{'s' if layers > 1 else ''} decoded"
-            st.success(label)
-            if probably_json:
-                st.caption("Looks like JSON 🧾")
-
-        with cols[1]:
-            st.code(decoded_text or "(empty output)", language="text")
-
-
-if __name__ == "__main__":
-    main()
-
-
+    decode_clicked = st.button("🔓 Decode Base64", type="primary")
