@@ -133,3 +133,98 @@ with right:
     )
 
     decode_clicked = st.button("🔓 Decode Base64", type="primary")
+
+# ---------------------------------------------
+# PART 2 — Decoding Logic + Output Rendering
+# (Paste this directly after PART 1)
+# ---------------------------------------------
+
+def safe_b64_decode(data: str) -> str:
+    """
+    Decode a Base64 string safely and return text.
+    - Strips whitespace
+    - Attempts to fix missing padding
+    - Returns UTF-8 text if possible, otherwise repr of bytes
+    """
+    data = data.strip()
+
+    # Add padding if missing
+    missing = len(data) % 4
+    if missing:
+        data += "=" * (4 - missing)
+
+    try:
+        raw = base64.b64decode(data, validate=False)
+    except binascii.Error as e:
+        raise ValueError(f"Invalid Base64 data: {e}")
+
+    # Try UTF-8 decode; if fails, show a safe bytes repr
+    try:
+        return raw.decode("utf-8", errors="strict")
+    except UnicodeDecodeError:
+        # Fallback: show bytes representation (still useful for secrets)
+        return repr(raw)
+
+
+# ---------------------------------------------
+# Handle Decode Button Click
+# ---------------------------------------------
+if decode_clicked:
+    if not b64_input or not b64_input.strip():
+        st.error("❌ No Base64 input provided.")
+    else:
+        decoded_text = ""
+        layers = 0
+        probably_json = False
+
+        try:
+            # First decode
+            decoded_text = safe_b64_decode(b64_input)
+            layers = 1
+
+            # Optional second decode
+            if double_decode:
+                try:
+                    decoded_text = safe_b64_decode(decoded_text)
+                    layers = 2
+                except Exception as inner_e:
+                    decoded_text += (
+                        "\n\n[!] Double-decode failed: " + str(inner_e)
+                    )
+
+            # Heuristic: looks like JSON?
+            stripped = decoded_text.strip()
+            if stripped.startswith("{") or stripped.startswith("["):
+                probably_json = True
+                # Try to pretty-print JSON
+                try:
+                    parsed_json = json.loads(stripped)
+                    decoded_text = json.dumps(
+                        parsed_json, indent=2, ensure_ascii=False
+                    )
+                except Exception:
+                    # If parsing fails, just keep raw decoded_text
+                    pass
+
+        except Exception as e:
+            st.error(f"❌ Decode error: {e}")
+        else:
+            # ---------------------------------------------
+            # Output layout
+            # ---------------------------------------------
+            res_left, res_right = st.columns([0.9, 2.1])
+
+            with res_left:
+                st.markdown(
+                    f"<div class='status-box'>✅ {layers} layer"
+                    f"{'s' if layers > 1 else ''} decoded</div>",
+                    unsafe_allow_html=True,
+                )
+                if probably_json:
+                    st.caption("Looks like JSON 🧾")
+                st.caption(f"Output length: {len(decoded_text)} characters")
+
+            with res_right:
+                st.subheader("Decoded Output")
+                st.code(decoded_text or "(empty output)", language="text")
+
