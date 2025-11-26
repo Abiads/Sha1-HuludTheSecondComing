@@ -1,6 +1,4 @@
-# ---------------------------------------------
-# streamlit_app.py  (PART 1 — Setup + Base UI)
-# ---------------------------------------------
+
 
 import base64
 import binascii
@@ -92,8 +90,8 @@ st.markdown(
 # -------------------------------------------------
 st.markdown("<h1>🧩 Sha1-Hulud: The Second Coming</h1>", unsafe_allow_html=True)
 st.markdown(
-    "<div class='caption-text'>A powerful demonstration: Base64 is **encoding**, not encryption.</div>",
-    unsafe_allow_html=True
+    "<div class='caption-text'>A powerful demonstration: Base64 is <strong>encoding</strong>, not encryption.</div>",
+    unsafe_allow_html=True,
 )
 
 # -------------------------------------------------
@@ -134,11 +132,9 @@ with right:
 
     decode_clicked = st.button("🔓 Decode Base64", type="primary")
 
-# ---------------------------------------------
-# PART 2 — Decoding Logic + Output Rendering
-# (Paste this directly after PART 1)
-# ---------------------------------------------
-
+# -------------------------------------------------
+# Decoding helper
+# -------------------------------------------------
 def safe_b64_decode(data: str) -> str:
     """
     Decode a Base64 string safely and return text.
@@ -165,10 +161,9 @@ def safe_b64_decode(data: str) -> str:
         # Fallback: show bytes representation (still useful for secrets)
         return repr(raw)
 
-
-# ---------------------------------------------
+# -------------------------------------------------
 # Handle Decode Button Click
-# ---------------------------------------------
+# -------------------------------------------------
 if decode_clicked:
     if not b64_input or not b64_input.strip():
         st.error("❌ No Base64 input provided.")
@@ -209,9 +204,7 @@ if decode_clicked:
         except Exception as e:
             st.error(f"❌ Decode error: {e}")
         else:
-            # ---------------------------------------------
             # Output layout
-            # ---------------------------------------------
             res_left, res_right = st.columns([0.9, 2.1])
 
             with res_left:
@@ -227,4 +220,3 @@ if decode_clicked:
             with res_right:
                 st.subheader("Decoded Output")
                 st.code(decoded_text or "(empty output)", language="text")
-
